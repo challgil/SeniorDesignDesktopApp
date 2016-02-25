@@ -3,39 +3,54 @@ package com.test;
 
 //import javax.bluetooth.DiscoveryAgent;
 import javax.bluetooth.*;
+import java.io.IOException;
+import java.util.Vector;
 
 /**
  * Created by Christopher on 2/24/2016.
  */
 public class main {
-    private static Object lock=new Object();
+    public static final Vector/*<RemoteDevice>*/ devicesDiscovered = new Vector();
 
-    public static void main(String[] args){
+    public static void main(String[] args) throws IOException, InterruptedException {
 
-        try{
-            // 1
-            LocalDevice localDevice = LocalDevice.getLocalDevice();
+        final Object inquiryCompletedEvent = new Object();
 
-            // 2
-            DiscoveryAgent agent = localDevice.getDiscoveryAgent();
+        devicesDiscovered.clear();
 
-            // 3
-            agent.startInquiry(DiscoveryAgent.GIAC, new MyDiscoveryListener());
+        DiscoveryListener listener = new DiscoveryListener() {
 
-            try {
-                synchronized(lock){
-                    lock.wait();
+            public void deviceDiscovered(RemoteDevice btDevice, DeviceClass cod) {
+                System.out.println("Device " + btDevice.getBluetoothAddress() + " found");
+                devicesDiscovered.addElement(btDevice);
+                try {
+                    System.out.println("     name " + btDevice.getFriendlyName(false));
+                } catch (IOException cantGetDeviceName) {
                 }
             }
-            catch (InterruptedException e) {
-                e.printStackTrace();
+
+            public void inquiryCompleted(int discType) {
+                System.out.println("Device Inquiry completed!");
+                synchronized(inquiryCompletedEvent){
+                    inquiryCompletedEvent.notifyAll();
+                }
             }
-            System.out.println("Device Inquiry Completed. ");
 
-        }
-        catch (Exception e) {
-            e.printStackTrace();
-        }
+            public void serviceSearchCompleted(int transID, int respCode) {
+            }
 
+            public void servicesDiscovered(int transID, ServiceRecord[] servRecord) {
+            }
+        };
+
+        synchronized(inquiryCompletedEvent) {
+            boolean started = LocalDevice.getLocalDevice().getDiscoveryAgent().startInquiry(DiscoveryAgent.GIAC, listener);
+            if (started) {
+                System.out.println("wait for device inquiry to complete...");
+                inquiryCompletedEvent.wait();
+                System.out.println(devicesDiscovered.size() +  " device(s) found");
+            }
+        }
     }
+
 }
